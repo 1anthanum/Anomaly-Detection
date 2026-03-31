@@ -1,0 +1,38 @@
+# Default configuration for the anomaly detection system
+
+simulator:
+  base_value: 50.0
+  daily_amplitude: 20.0
+  weekly_amplitude: 10.0
+  noise_std: 2.0
+  sampling_rate: 1.0  # samples per minute
+  anomaly:
+    point_prob: 0.02
+    contextual_prob: 0.005
+    collective_prob: 0.003
+
+model:
+  window_size: 50
+  default: "lstm"  # "lstm" or "transformer"
+  lstm:
+    hidden_dim: 64
+    latent_dim: 32
+    n_layers: 2
+    dropout: 0.1
+  transformer:
+    d_model: 64
+    n_heads: 4
+    n_encoder_layers: 2
+    n_decoder_layers: 2
+    dim_feedforward: 128
+    dropout: 0.1
+
+detection:
+  threshold_percentile: 95
+  history_window: 200
+  alert_cooldown_steps: 10
+
+dashboard:
+  update_interval_ms: 200
+  chart_history: 500
+  max_alerts_display: 15
