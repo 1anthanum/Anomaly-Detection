@@ -5,14 +5,45 @@ Manages the lifecycle of all Streamlit session-state objects
 (simulator, model, scorer, alert engine, dashboard state).
 """
 
+import logging
+from pathlib import Path
+
 import torch
 import streamlit as st
 
-from src.data import TimeSeriesSimulator, SimulatorConfig, AnomalyConfig, TimeSeriesWindower
+from src.data import TimeSeriesWindower
 from src.detection import AnomalyScorer, AlertEngine
+from src.models import build_simulator_from_config, LSTMAutoencoder, TransformerDetector
 from src.visualization import DashboardState
 
 from .config import build_simulator, build_model
+
+logger = logging.getLogger(__name__)
+
+
+def _load_or_build_model(cfg: dict):
+    """Try to load a pre-trained model from weights/; fall back to building a fresh one."""
+    weights_path = Path("weights/best_model.pt")
+    model_cfg = cfg["model"]
+    if weights_path.exists():
+        try:
+            model_type = model_cfg["default"]
+            cls = LSTMAutoencoder if model_type == "lstm" else TransformerDetector
+            if model_type == "lstm":
+                p = model_cfg["lstm"]
+                model = cls.load(str(weights_path), hidden_dim=p["hidden_dim"],
+                                 latent_dim=p["latent_dim"], n_layers=p["n_layers"])
+            else:
+                p = model_cfg["transformer"]
+                model = cls.load(str(weights_path), d_model=p["d_model"], n_heads=p["n_heads"],
+                                 n_encoder_layers=p["n_encoder_layers"],
+                                 n_decoder_layers=p["n_decoder_layers"],
+                                 dim_feedforward=p["dim_feedforward"])
+            logger.info("Loaded pre-trained model from %s", weights_path)
+            return model
+        except Exception as e:
+            logger.warning("Failed to load model from %s: %s. Building fresh model.", weights_path, e)
+    return build_model(cfg)
 
 
 def init_session_state(cfg: dict):
@@ -26,7 +57,7 @@ def init_session_state(cfg: dict):
 
     # Core components
     st.session_state.simulator = build_simulator(cfg)
-    st.session_state.model = build_model(cfg)
+    st.session_state.model = _load_or_build_model(cfg)
     st.session_state.model.eval()
 
     st.session_state.windower = TimeSeriesWindower(window_size=model_cfg["window_size"])
@@ -57,17 +88,7 @@ def calibrate(cfg: dict):
     scorer = st.session_state.scorer
 
     # Generate calibration data (normal traffic, no anomalies)
-    sim_cfg = cfg["simulator"]
-    cal_sim = TimeSeriesSimulator(
-        SimulatorConfig(
-            base_value=sim_cfg["base_value"],
-            daily_amplitude=sim_cfg["daily_amplitude"],
-            weekly_amplitude=sim_cfg["weekly_amplitude"],
-            noise_std=sim_cfg["noise_std"],
-            sampling_rate=sim_cfg["sampling_rate"],
-            anomaly=AnomalyConfig(point_prob=0, contextual_prob=0, collective_prob=0),
-        )
-    )
+    cal_sim = build_simulator_from_config(cfg, with_anomalies=False)
     cal_batch = cal_sim.generate_batch(1000)
     cal_values = cal_batch["values"]
 

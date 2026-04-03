@@ -1,8 +1,9 @@
 """
-Model trainer: handles training loop, validation, and checkpointing
-for anomaly detection autoencoders.
+Model trainer: handles training loop, validation, checkpointing,
+early stopping, and learning rate scheduling for anomaly detection autoencoders.
 """
 
+import logging
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
@@ -10,6 +11,8 @@ import numpy as np
 from pathlib import Path
 
 from src.models.base import AnomalyDetector
+
+logger = logging.getLogger(__name__)
 
 
 class Trainer:
@@ -20,11 +23,16 @@ class Trainer:
         model: AnomalyDetector,
         lr: float = 1e-3,
         weight_decay: float = 1e-5,
+        max_grad_norm: float = 1.0,
         device: str = "cpu",
     ):
         self.model = model.to(device)
         self.device = device
+        self.max_grad_norm = max_grad_norm
         self.optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+        self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            self.optimizer, mode="min", factor=0.5, patience=5, min_lr=1e-6
+        )
         self.criterion = nn.MSELoss()
         self.history: dict[str, list[float]] = {"train_loss": [], "val_loss": []}
 
@@ -42,6 +50,7 @@ class Trainer:
             outputs = self.model(inputs)
             loss = self.criterion(outputs, targets)
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
             self.optimizer.step()
 
             total_loss += loss.item()
@@ -72,11 +81,18 @@ class Trainer:
         train_loader: DataLoader,
         val_loader: DataLoader = None,
         epochs: int = 50,
+        patience: int = 10,
         save_path: str = None,
         verbose: bool = True,
     ) -> dict[str, list[float]]:
-        """Full training loop with optional validation and checkpointing."""
+        """Full training loop with optional validation, early stopping, and checkpointing.
+
+        Args:
+            patience: Stop training if validation loss does not improve for this
+                      many consecutive epochs. Set to 0 to disable early stopping.
+        """
         best_val_loss = float("inf")
+        epochs_without_improvement = 0
 
         for epoch in range(1, epochs + 1):
             train_loss = self.train_epoch(train_loader)
@@ -87,16 +103,36 @@ class Trainer:
                 val_loss = self.validate(val_loader)
                 self.history["val_loss"].append(val_loss)
 
+                # Step the LR scheduler
+                self.scheduler.step(val_loss)
+
                 # Save best model
-                if save_path and val_loss < best_val_loss:
+                if val_loss < best_val_loss:
                     best_val_loss = val_loss
-                    self.model.save(save_path)
+                    epochs_without_improvement = 0
+                    if save_path:
+                        self.model.save(save_path)
+                else:
+                    epochs_without_improvement += 1
+
+                # Early stopping
+                if patience > 0 and epochs_without_improvement >= patience:
+                    logger.info(
+                        "Early stopping at epoch %d (no improvement for %d epochs)",
+                        epoch, patience,
+                    )
+                    if verbose:
+                        print(f"Early stopping at epoch {epoch} (no improvement for {patience} epochs)")
+                    break
 
             if verbose and epoch % 10 == 0:
+                lr = self.optimizer.param_groups[0]["lr"]
                 msg = f"Epoch {epoch}/{epochs} | Train Loss: {train_loss:.6f}"
                 if val_loss is not None:
                     msg += f" | Val Loss: {val_loss:.6f}"
+                msg += f" | LR: {lr:.2e}"
                 print(msg)
+                logger.info(msg)
 
         # Save final model if no validation
         if save_path and val_loader is None:

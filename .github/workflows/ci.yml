@@ -21,4 +21,8 @@ jobs:
       - name: Lint
         run: |
           pip install ruff
-          ruff check src/
+          ruff check src/ app/
+      - name: Type check
+        run: |
+          pip install mypy
+          mypy src/ --ignore-missing-imports --no-strict-optional

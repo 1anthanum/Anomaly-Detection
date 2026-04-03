@@ -1,8 +1,6 @@
 """Tests for anomaly detection models."""
 
 import torch
-import sys
-sys.path.insert(0, '.')
 
 from src.models.lstm_autoencoder import LSTMAutoencoder
 from src.models.transformer_detector import TransformerDetector

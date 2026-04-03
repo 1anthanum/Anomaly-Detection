@@ -1,0 +1,4 @@
+# Development and testing dependencies
+-r requirements.txt
+pytest>=7.0
+ruff>=0.1.0

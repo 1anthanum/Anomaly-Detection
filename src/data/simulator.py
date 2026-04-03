@@ -34,10 +34,10 @@ class SimulatorConfig:
 class TimeSeriesSimulator:
     """Generates realistic streaming time series with anomaly injection."""
 
-    def __init__(self, config: SimulatorConfig = None):
+    def __init__(self, config: SimulatorConfig = None, seed: int | None = 42):
         self.config = config or SimulatorConfig()
         self.step = 0
-        self.rng = np.random.default_rng(42)
+        self.rng = np.random.default_rng(seed)
         self._collective_remaining = 0
         self._collective_direction = 0
 
@@ -123,6 +123,68 @@ class TimeSeriesSimulator:
             "values": np.array([p["value"] for p in points]),
             "is_anomaly": np.array([p["is_anomaly"] for p in points]),
             "anomaly_types": [p["anomaly_type"] for p in points],
+            "timestamps": np.array([p["timestamp_minutes"] for p in points]),
+        }
+
+
+class MultiMetricSimulator:
+    """Generates correlated multi-variate time series (CPU, memory, network).
+
+    Each metric shares the same anomaly injection timing but has
+    independent base patterns and noise, enabling multi-variate
+    anomaly detection experiments.
+    """
+
+    METRIC_CONFIGS = {
+        "cpu": {"base_value": 50.0, "daily_amplitude": 20.0, "weekly_amplitude": 10.0, "noise_std": 2.0},
+        "memory": {"base_value": 65.0, "daily_amplitude": 10.0, "weekly_amplitude": 5.0, "noise_std": 1.5},
+        "network": {"base_value": 30.0, "daily_amplitude": 25.0, "weekly_amplitude": 15.0, "noise_std": 3.0},
+    }
+
+    def __init__(self, metrics: list[str] = None, anomaly: AnomalyConfig = None,
+                 sampling_rate: float = 1.0, seed: int | None = 42):
+        self.metric_names = metrics or ["cpu", "memory", "network"]
+        anomaly_cfg = anomaly or AnomalyConfig()
+        self.simulators: dict[str, TimeSeriesSimulator] = {}
+        for i, name in enumerate(self.metric_names):
+            cfg = self.METRIC_CONFIGS.get(name, self.METRIC_CONFIGS["cpu"])
+            self.simulators[name] = TimeSeriesSimulator(
+                SimulatorConfig(
+                    base_value=cfg["base_value"],
+                    daily_amplitude=cfg["daily_amplitude"],
+                    weekly_amplitude=cfg["weekly_amplitude"],
+                    noise_std=cfg["noise_std"],
+                    sampling_rate=sampling_rate,
+                    anomaly=anomaly_cfg,
+                ),
+                seed=seed + i if seed is not None else None,
+            )
+
+    @property
+    def n_metrics(self) -> int:
+        return len(self.metric_names)
+
+    def generate_point(self) -> dict:
+        """Generate a single multi-metric data point."""
+        points = {name: sim.generate_point() for name, sim in self.simulators.items()}
+        first = next(iter(points.values()))
+        return {
+            "step": first["step"],
+            "timestamp_minutes": first["timestamp_minutes"],
+            "values": {name: p["value"] for name, p in points.items()},
+            "is_anomaly": any(p["is_anomaly"] for p in points.values()),
+            "anomaly_types": {name: p["anomaly_type"] for name, p in points.items()},
+        }
+
+    def generate_batch(self, n_points: int) -> dict:
+        """Generate a batch of multi-metric data points."""
+        points = [self.generate_point() for _ in range(n_points)]
+        return {
+            "values": np.column_stack([
+                [p["values"][name] for p in points] for name in self.metric_names
+            ]),  # shape: (n_points, n_metrics)
+            "is_anomaly": np.array([p["is_anomaly"] for p in points]),
+            "metric_names": self.metric_names,
             "timestamps": np.array([p["timestamp_minutes"] for p in points]),
         }
 

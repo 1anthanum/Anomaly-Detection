@@ -1,8 +1,6 @@
 """Tests for the data simulator."""
 
 import numpy as np
-import sys
-sys.path.insert(0, '.')
 
 from src.data.simulator import TimeSeriesSimulator, SimulatorConfig, AnomalyConfig
 

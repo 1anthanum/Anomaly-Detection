@@ -5,17 +5,22 @@ Provides charts, metrics, and alert panels.
 
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from dataclasses import dataclass
+from collections import deque
+from dataclasses import dataclass, field
 
 
 @dataclass
 class DashboardState:
-    """Holds the rolling state for dashboard rendering."""
-    steps: list[int]
-    values: list[float]
-    scores: list[float]
-    thresholds: list[float]
-    anomaly_flags: list[bool]
+    """Holds the rolling state for dashboard rendering.
+
+    Uses fixed-size deques for O(1) append with automatic eviction
+    of oldest entries when max_display is exceeded.
+    """
+    steps: deque
+    values: deque
+    scores: deque
+    thresholds: deque
+    anomaly_flags: deque
     max_display: int = 500
 
     def append(self, step: int, value: float, score: float,
@@ -25,17 +30,17 @@ class DashboardState:
         self.scores.append(score)
         self.thresholds.append(threshold)
         self.anomaly_flags.append(is_anomaly)
-        # Trim to max display length
-        if len(self.steps) > self.max_display:
-            self.steps = self.steps[-self.max_display:]
-            self.values = self.values[-self.max_display:]
-            self.scores = self.scores[-self.max_display:]
-            self.thresholds = self.thresholds[-self.max_display:]
-            self.anomaly_flags = self.anomaly_flags[-self.max_display:]
 
     @classmethod
     def create(cls, max_display: int = 500) -> "DashboardState":
-        return cls([], [], [], [], [], max_display)
+        return cls(
+            steps=deque(maxlen=max_display),
+            values=deque(maxlen=max_display),
+            scores=deque(maxlen=max_display),
+            thresholds=deque(maxlen=max_display),
+            anomaly_flags=deque(maxlen=max_display),
+            max_display=max_display,
+        )
 
 
 def create_timeseries_chart(state: DashboardState) -> go.Figure:

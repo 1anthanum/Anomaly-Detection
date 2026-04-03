@@ -1,8 +1,6 @@
 """Tests for the data preprocessor."""
 
 import numpy as np
-import sys
-sys.path.insert(0, '.')
 
 from src.data.preprocessor import TimeSeriesWindower, WindowDataset, create_dataloader
 

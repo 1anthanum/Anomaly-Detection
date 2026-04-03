@@ -85,7 +85,7 @@ def run_streaming_loop(placeholders: dict, cfg: dict, speed_ms: int, batch_size:
 
                 result = scorer.score(raw_error)
                 score = result.score
-                threshold = scorer._normalize_score(result.threshold)
+                threshold = result.threshold_score
                 is_detected = result.is_anomaly
 
                 if is_detected:

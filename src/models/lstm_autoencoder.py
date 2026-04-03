@@ -43,6 +43,15 @@ class LSTMAutoencoder(AnomalyDetector):
         )
         self.output_fc = nn.Linear(hidden_dim, n_features)
 
+    def _get_config(self) -> dict:
+        return {
+            "window_size": self.window_size,
+            "n_features": self.n_features,
+            "hidden_dim": self.hidden_dim,
+            "latent_dim": self.latent_dim,
+            "n_layers": self.n_layers,
+        }
+
     def encode(self, x: torch.Tensor) -> torch.Tensor:
         """Encode input sequence to latent representation. x: (batch, seq_len, features)"""
         _, (h_n, _) = self.encoder_lstm(x)

@@ -1,8 +1,6 @@
 """Tests for anomaly scoring."""
 
 import numpy as np
-import sys
-sys.path.insert(0, '.')
 
 from src.detection.scoring import AnomalyScorer, AnomalyResult
 

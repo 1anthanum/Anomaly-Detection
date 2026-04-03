@@ -1,7 +1,5 @@
 """Tests for alert engine."""
 
-import sys
-sys.path.insert(0, '.')
 
 from src.detection.scoring import AnomalyResult
 from src.detection.alerts import AlertEngine, Alert
@@ -10,7 +8,7 @@ from src.detection.alerts import AlertEngine, Alert
 def _make_result(score=0.9, is_anomaly=True, severity="critical"):
     return AnomalyResult(
         score=score, is_anomaly=is_anomaly,
-        raw_error=0.5, threshold=0.3, severity=severity,
+        raw_error=0.5, threshold=0.3, threshold_score=0.7, severity=severity,
     )
 
 

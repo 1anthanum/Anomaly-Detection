@@ -10,11 +10,12 @@ from dataclasses import dataclass
 @dataclass
 class AnomalyResult:
     """Result of anomaly detection for a single window."""
-    score: float           # Normalized anomaly score [0, 1]
-    is_anomaly: bool       # Whether score exceeds threshold
-    raw_error: float       # Raw reconstruction error
-    threshold: float       # Current threshold value
-    severity: str          # "normal", "warning", "critical"
+    score: float               # Normalized anomaly score [0, 1]
+    is_anomaly: bool           # Whether score exceeds threshold
+    raw_error: float           # Raw reconstruction error
+    threshold: float           # Current raw threshold value
+    threshold_score: float     # Normalized threshold [0, 1] (for display)
+    severity: str              # "normal", "warning", "critical"
 
 
 class AnomalyScorer:
@@ -76,6 +77,7 @@ class AnomalyScorer:
             is_anomaly=raw_error > threshold,
             raw_error=raw_error,
             threshold=threshold,
+            threshold_score=threshold_score,
             severity=self._classify_severity(normalized, threshold_score),
         )
 
