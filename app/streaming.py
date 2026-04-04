@@ -3,6 +3,9 @@ Real-time streaming loop and static (paused) rendering.
 
 This module owns the core detection cycle:
 generate → window → score → alert → render.
+
+When Chronos comparison mode is enabled (via sidebar toggle), it also
+runs the Chronos baseline on each window and overlays the results.
 """
 
 import time
@@ -50,6 +53,8 @@ def _update_display(placeholders: dict, score: float):
 def run_streaming_loop(placeholders: dict, cfg: dict, speed_ms: int, batch_size: int):
     """Run the real-time detection loop (blocking while running)."""
     window_size = cfg["model"]["window_size"]
+    chronos_detector = st.session_state.get("chronos_detector")
+    chronos_ctx = getattr(chronos_detector, "context_length", 64) if chronos_detector else 64
 
     while st.session_state.running:
         sim = st.session_state.simulator
@@ -73,6 +78,7 @@ def run_streaming_loop(placeholders: dict, cfg: dict, speed_ms: int, batch_size:
             score = 0.0
             threshold = 0.0
             is_detected = False
+            chronos_anomaly = None
 
             # Score when we have enough data for a window
             if len(st.session_state.value_buffer) >= window_size:
@@ -92,7 +98,17 @@ def run_streaming_loop(placeholders: dict, cfg: dict, speed_ms: int, batch_size:
                     st.session_state.detected_anomalies += 1
                     alert_engine.check(result, step, value)
 
-            dash.append(step, value, score, threshold, is_detected)
+                # Optional Chronos comparison
+                if chronos_detector is not None and len(st.session_state.value_buffer) >= chronos_ctx:
+                    context = np.array(
+                        st.session_state.value_buffer[-chronos_ctx - 1 : -1],
+                        dtype=np.float32,
+                    )
+                    actual = float(value)
+                    ch_result = chronos_detector.detect_single(context, actual)
+                    chronos_anomaly = ch_result.is_anomaly
+
+            dash.append(step, value, score, threshold, is_detected, chronos_anomaly)
 
         _update_display(placeholders, score)
         time.sleep(speed_ms / 1000)

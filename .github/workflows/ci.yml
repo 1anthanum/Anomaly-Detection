@@ -21,7 +21,7 @@ jobs:
       - name: Lint
         run: |
           pip install ruff
-          ruff check src/ app/
+          ruff check src/ app/ scripts/
       - name: Type check
         run: |
           pip install mypy types-PyYAML

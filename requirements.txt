@@ -4,3 +4,7 @@ pandas>=2.0.0
 streamlit>=1.30.0
 plotly>=5.18.0
 pyyaml>=6.0
+
+# Optional: Chronos foundation model baseline comparison
+# pip install chronos-forecasting
+# chronos-forecasting>=1.0.0

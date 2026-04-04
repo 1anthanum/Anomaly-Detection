@@ -21,15 +21,18 @@ class DashboardState:
     scores: deque
     thresholds: deque
     anomaly_flags: deque
+    chronos_flags: deque          # Chronos baseline anomaly flags (optional)
     max_display: int = 500
 
     def append(self, step: int, value: float, score: float,
-               threshold: float, is_anomaly: bool):
+               threshold: float, is_anomaly: bool,
+               chronos_anomaly: bool | None = None):
         self.steps.append(step)
         self.values.append(value)
         self.scores.append(score)
         self.thresholds.append(threshold)
         self.anomaly_flags.append(is_anomaly)
+        self.chronos_flags.append(chronos_anomaly)
 
     @classmethod
     def create(cls, max_display: int = 500) -> "DashboardState":
@@ -39,12 +42,19 @@ class DashboardState:
             scores=deque(maxlen=max_display),
             thresholds=deque(maxlen=max_display),
             anomaly_flags=deque(maxlen=max_display),
+            chronos_flags=deque(maxlen=max_display),
             max_display=max_display,
         )
 
 
 def create_timeseries_chart(state: DashboardState) -> go.Figure:
-    """Create the main time series chart with anomaly markers."""
+    """Create the main time series chart with anomaly markers.
+
+    If Chronos baseline data is present (non-None values in
+    ``state.chronos_flags``), an additional marker trace is drawn.
+    """
+    has_chronos = any(f is not None for f in state.chronos_flags)
+
     fig = make_subplots(
         rows=2, cols=1, shared_xaxes=True,
         row_heights=[0.65, 0.35],
@@ -55,30 +65,44 @@ def create_timeseries_chart(state: DashboardState) -> go.Figure:
     # --- Top panel: Time series with anomaly markers ---
     fig.add_trace(
         go.Scatter(
-            x=state.steps, y=state.values,
+            x=list(state.steps), y=list(state.values),
             mode="lines", name="CPU Usage",
             line=dict(color="#3b82f6", width=1.5),
         ),
         row=1, col=1,
     )
 
-    # Highlight anomaly points
+    # Autoencoder anomaly markers
     anom_steps = [s for s, f in zip(state.steps, state.anomaly_flags) if f]
     anom_vals = [v for v, f in zip(state.values, state.anomaly_flags) if f]
     if anom_steps:
         fig.add_trace(
             go.Scatter(
                 x=anom_steps, y=anom_vals,
-                mode="markers", name="Anomaly",
+                mode="markers", name="Anomaly (AE)",
                 marker=dict(color="#ef4444", size=7, symbol="x"),
             ),
             row=1, col=1,
         )
 
+    # Chronos anomaly markers (triangles, different color)
+    if has_chronos:
+        ch_steps = [s for s, f in zip(state.steps, state.chronos_flags) if f is True]
+        ch_vals = [v for v, f in zip(state.values, state.chronos_flags) if f is True]
+        if ch_steps:
+            fig.add_trace(
+                go.Scatter(
+                    x=ch_steps, y=ch_vals,
+                    mode="markers", name="Anomaly (Chronos)",
+                    marker=dict(color="#a855f7", size=8, symbol="triangle-up"),
+                ),
+                row=1, col=1,
+            )
+
     # --- Bottom panel: Anomaly score vs threshold ---
     fig.add_trace(
         go.Scatter(
-            x=state.steps, y=state.scores,
+            x=list(state.steps), y=list(state.scores),
             mode="lines", name="Score",
             line=dict(color="#f59e0b", width=1.5),
         ),
@@ -86,7 +110,7 @@ def create_timeseries_chart(state: DashboardState) -> go.Figure:
     )
     fig.add_trace(
         go.Scatter(
-            x=state.steps, y=state.thresholds,
+            x=list(state.steps), y=list(state.thresholds),
             mode="lines", name="Threshold",
             line=dict(color="#ef4444", width=1, dash="dash"),
         ),

@@ -1,6 +1,7 @@
 """
 Model trainer: handles training loop, validation, checkpointing,
-early stopping, and learning rate scheduling for anomaly detection autoencoders.
+early stopping, learning rate scheduling, and experiment logging
+for anomaly detection autoencoders.
 """
 
 import logging
@@ -10,6 +11,7 @@ from torch.utils.data import DataLoader
 import numpy as np
 
 from src.models.base import AnomalyDetector
+from src.training.logger import TrainingLogger, NullLogger
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +26,7 @@ class Trainer:
         weight_decay: float = 1e-5,
         max_grad_norm: float = 1.0,
         device: str = "cpu",
+        experiment_logger: TrainingLogger | None = None,
     ):
         self.model = model.to(device)
         self.device = device
@@ -34,6 +37,7 @@ class Trainer:
         )
         self.criterion = nn.MSELoss()
         self.history: dict[str, list[float]] = {"train_loss": [], "val_loss": []}
+        self.exp_logger: TrainingLogger = experiment_logger or NullLogger()
 
     def train_epoch(self, dataloader: DataLoader) -> float:
         """Run one training epoch. Returns average loss."""
@@ -90,17 +94,29 @@ class Trainer:
             patience: Stop training if validation loss does not improve for this
                       many consecutive epochs. Set to 0 to disable early stopping.
         """
+        # Log hyperparameters at run start
+        self.exp_logger.log_params({
+            "model_class": type(self.model).__name__,
+            "epochs": epochs,
+            "patience": patience,
+            "lr": self.optimizer.param_groups[0]["lr"],
+            "max_grad_norm": self.max_grad_norm,
+            "window_size": getattr(self.model, "window_size", "N/A"),
+        })
+
         best_val_loss = float("inf")
         epochs_without_improvement = 0
 
         for epoch in range(1, epochs + 1):
             train_loss = self.train_epoch(train_loader)
             self.history["train_loss"].append(train_loss)
+            self.exp_logger.log_scalar("loss/train", train_loss, epoch)
 
             val_loss = None
             if val_loader is not None:
                 val_loss = self.validate(val_loader)
                 self.history["val_loss"].append(val_loss)
+                self.exp_logger.log_scalar("loss/val", val_loss, epoch)
 
                 # Step the LR scheduler
                 self.scheduler.step(val_loss)
@@ -124,8 +140,11 @@ class Trainer:
                         print(f"Early stopping at epoch {epoch} (no improvement for {patience} epochs)")
                     break
 
+            # Log learning rate
+            lr = self.optimizer.param_groups[0]["lr"]
+            self.exp_logger.log_scalar("lr", lr, epoch)
+
             if verbose and epoch % 10 == 0:
-                lr = self.optimizer.param_groups[0]["lr"]
                 msg = f"Epoch {epoch}/{epochs} | Train Loss: {train_loss:.6f}"
                 if val_loss is not None:
                     msg += f" | Val Loss: {val_loss:.6f}"
@@ -137,6 +156,7 @@ class Trainer:
         if save_path and val_loader is None:
             self.model.save(save_path)
 
+        self.exp_logger.close()
         return self.history
 
     def compute_reconstruction_errors(self, dataloader: DataLoader) -> np.ndarray:
