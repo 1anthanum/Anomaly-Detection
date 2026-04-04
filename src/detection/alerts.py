@@ -1,6 +1,6 @@
 """Alert engine: manages anomaly alerts with deduplication and severity tracking."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from .scoring import AnomalyResult
 

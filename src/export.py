@@ -7,7 +7,6 @@ import csv
 import json
 import logging
 from pathlib import Path
-from dataclasses import asdict
 from datetime import datetime
 from urllib.request import Request, urlopen
 from urllib.error import URLError

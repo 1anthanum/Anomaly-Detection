@@ -8,7 +8,6 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 import numpy as np
-from pathlib import Path
 
 from src.models.base import AnomalyDetector
 

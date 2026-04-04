@@ -127,7 +127,7 @@ class TrainingPipeline:
 
         detected = sum(predictions)
         if verbose:
-            print(f"\nTraining complete!")
+            print("\nTraining complete!")
             print(f"  Final train loss: {history['train_loss'][-1]:.6f}")
             print(f"  Final val loss:   {history['val_loss'][-1]:.6f}")
             print(f"  Test anomalies detected: {detected}/{len(results)}")

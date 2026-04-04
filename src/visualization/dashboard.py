@@ -6,7 +6,7 @@ Provides charts, metrics, and alert panels.
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from collections import deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass
